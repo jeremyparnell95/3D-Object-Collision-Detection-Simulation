@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<title>CS-114 Final Project</title> 
+		<style>
+			body {
+				color: #fff;
+				font-family:Times New Roman;
+				font-size: 14px;
+				text-align:center;
+
+				background-color: #000;
+
+				margin: 0px;
+				overflow: hidden;
+
+			}
+
+			#info {
+				color: #ffffff;
+				padding:10px;
+				font-family: Times New Roman;
+				font-size: 14px;
+				text-align:center;
+			}
+
+			#button {
+				border:none;
+				color: white;
+				text-align: center;
+				text-decoration: none;
+				display: inline-block;
+				font-size: 16px;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="info">A simple scene that showcases object colision between spheres<br>A project by Hoang Nguyen and Jeremy Parnell<br>
+		CS114 - Projects in Advanced 3D Computer Graphics</br></div>
+		<button type="button" onclick="addSphere();";>Click to spawn spheres</button>
+		<button type="button" onclick="resetScene();">Reset Scene</button>
+		<script src="js/three.js"></script>
+		<script src="js/OrbitControls.js"></script>
+		<script src="js/Detector.js"></script>
+		<script src="js/dat.gui.min.js"></script>
+		<script>
+			//Declaring global variables
+			var camera, scene, renderer;
+			var geometry, material, mesh;
+			var gui, params;
+
+			var maxSpheres;
+			var spheres = [];
+			var walls = [];
+			var clicks = 0;
+			var count = 0;
+			var shade;
+
+			var rand_dir = [];
+			var directions = [];
+			var speed;
+			var entered = [];
+
+			var fps = 240;
+
+
+			function getInput() {
+				while(1)
+				{
+					// While loop to get user input for max amount of balls
+					sphereInp = prompt("Please enter max amount of ball to spawn (5, 10, 15, or 20)", 5);
+					switch (sphereInp)
+					{
+						case "5":
+							maxSpheres = 5;
+							break;
+						case "10":
+							maxSpheres = 10;
+							break;
+						case "15":
+							maxSpheres = 15;
+							break;
+						case "20":
+							maxSpheres = 20;
+							break;
+						default:
+							alert("Please enter 5, 10, 15, or 20");
+							continue;
+					}
+					break;
+				}
+
+				while(1)
+				{
+					// While loop to get speed for balls from user
+					speedInp = prompt("Please enter a speed for the balls (1 = fast; 2 = medium; 3 = slow)", 2);
+					switch (speedInp)
+					{
+						case "1":
+							speed = 1;
+							break;
+						case "2":
+							speed = 2;
+							break;
+						case "3":
+							speed = 3;
+							break;
+						default:
+							alert("Please enter 1, 2, or 3");
+							continue;
+					}
+					break;
+				}
+			}
+
+			function getRandomInt(min, max) {
+				// Function to generate a random number inclusively within a given range
+				return Math.floor(Math.random() * (max - min + 1 )) + min;
+			}
+
+			function resetScene() {
+				//Resets the page and re-runs everything
+				location.reload();
+			}
+
+			function addSphere() {
+				if(clicks <= maxSpheres)
+				{
+					// Creates a sphere geometry and determine the material
+					geometry = new THREE.SphereGeometry(3, 10,10)
+					if (params.tracking_mode == true)
+					{
+							material = new THREE.MeshPhongMaterial({color: 0xffffff});
+					}
+					else
+					{
+						material = new THREE.MeshPhongMaterial({color: '#'+(Math.random()*0xFFFFFF<<0).toString(16)});
+					}
+					mesh = new THREE.Mesh(geometry, material);	// Creates a new mesh with the geometry and material
+
+					// Generate a random spot for the ball to spawn within the room
+					mesh.position.x = getRandomInt(-24,24);
+					mesh.position.y = getRandomInt(-29,39);
+					mesh.position.z = getRandomInt(-14,54);
+
+					// Enable the balls to cast shadows and receive shadow
+					mesh.castShadow = true;
+					mesh.receiveShadow = true;
+
+					// Add the ball to the scene and to the array of spheres
+					spheres.push(mesh);
+					scene.add(mesh);
+
+					clicks = clicks + 1;
+				}
+				else
+				{
+					// If the number of clicks to spawn sphere exceeds the user pre-defined number, send an alert that prevents more from spawning in
+					alert("Maximum amount of balls spawned!");
+				}
+			}
+
+			var onResize = function() {
+				// Function to allow the scene to resize to match the window upon being resized by user.
+				var width = window.innerWidth;
+				var height = window.innerHeight;
+				renderer.setSize(width, height);
+				camera.aspect = width / height;
+				camera.updateProjectionMatrix();
+			}
+
+			var collisionDetection = function() {
+				// Detects collisions between balls and walls 
+
+				// Iterates between each sphere
+				for ( var i = 0, il = spheres.length; i < il; i ++ ) {
+					var sphere = spheres[ i ];
+
+					// Iterates between every other sphere in the scene
+					for ( var j = 0, jl = spheres.length; j < jl; j ++ ) 
+					{
+						if(j != i)
+						{	
+							// Determining the Euclidean distance between the balls
+							var temp = spheres[ j ];
+							var dx = sphere.position.x - temp.position.x;
+							var dy = sphere.position.y - temp.position.y;
+							var dz = sphere.position.z - temp.position.z;
+							var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+							if(dist <= 6)
+							{
+								// If the distance is less than 6 units, a collision is detected
+								var total = 0
+								if(~entered[i].indexOf(j) == false)
+								{
+									entered[i].push(j);
+								}
+								for(k = 0;k < maxSpheres;k++)
+								{
+									 total += entered[k].length;
+								}
+								// Increment the collision counter
+								params.collision = total;
+
+								if (params.tracking_mode)
+								{
+									// If tracking mode is enabled, swap the colors of the colliding balls
+									var colorCopy = sphere.material.color.clone();
+									sphere.material.color.copy(temp.material.color);
+									temp.material.color.copy(colorCopy);
+
+								}
+
+								// Manipulating the velocities of the balls
+								if(directions[i] * directions[j] < 0)
+								{
+									directions[i] = -directions[i];
+									directions[j] = -directions[j];
+								}
+								if(rand_dir[i*2] * rand_dir[j*2] < 0)
+								{
+									rand_dir[i*2] = -rand_dir[i*2];
+									rand_dir[j*2] = -rand_dir[j*2];
+									
+								}
+								if(rand_dir[i*2 + 1] * rand_dir[j*2 + 1] < 0)
+								{
+									rand_dir[i*2 + 1] = -rand_dir[i*2 + 1];
+									rand_dir[j*2 + 1] = -rand_dir[j*2 + 1];
+								}
+							}	
+						}	
+					}
+
+					// Random hex value generator
+					shade = "0x" + "000000".replace(/0/g,function(){return (~~(Math.random()*16)).toString(16);});
+
+					// Checking collisions between walls and updates ball velocity and color values accordingly
+					if(sphere.position.x >= walls[4].position.x - 3.5 && rand_dir[i*2] > 0)
+					{
+						rand_dir[i*2] = -rand_dir[i*2];
+						if (params.tracking_mode) // Checks if tracking mode is on
+						{
+							sphere.material.color.setHex("0x33cc33")
+						}
+						else // Changes ball to random colors
+						{
+							sphere.material.color.setHex(shade);
+						}
+					}
+					else if(sphere.position.x <= walls[5].position.x + 3.5 && rand_dir[i*2] < 0)
+					{
+						rand_dir[i*2] = -rand_dir[i*2];
+						if (params.tracking_mode) // Checks if tracking mode is on
+						{
+							sphere.material.color.setHex("0x3361FF")
+						}
+						else // Changes ball to random colors
+						{
+							sphere.material.color.setHex(shade);
+						}
+					}
+
+					if(sphere.position.y >= walls[2].position.y - 3.5 && directions[i] > 0)
+					{
+						directions[i] = -directions[i];
+						if (params.tracking_mode) // Checks if tracking mode is on
+						{
+							sphere.material.color.setHex("0xff8800")
+						}
+						else // Changes ball to random colors
+						{
+							sphere.material.color.setHex(shade);
+						}
+					}
+					else if(sphere.position.y <= walls[3].position.y + 3.5 && directions[i] < 0)
+					{
+						directions[i] = -directions[i];
+						if (params.tracking_mode) // Checks if tracking mode is on
+						{
+							sphere.material.color.setHex("0xffff00")
+						}
+						else // Changes ball to random colors
+						{
+							sphere.material.color.setHex(shade);
+						}
+					}
+
+					if(sphere.position.z >= walls[1].position.z - 3.5 && rand_dir[i*2 + 1] > 0)
+					{
+						rand_dir[i*2 + 1] = -rand_dir[i*2 + 1];
+						if (params.tracking_mode) // Checks if tracking mode is on
+						{
+							sphere.material.color.setHex("0xFF33FC")
+						}
+						else // Changes ball to random colors
+						{
+							sphere.material.color.setHex(shade);
+						}
+					}
+					else if(sphere.position.z <= walls[0].position.z + 3.5 && rand_dir[i*2 + 1] < 0)
+					{
+						rand_dir[i*2 + 1] = -rand_dir[i*2 + 1];
+						if (params.tracking_mode) // Checks if tracking mode is on
+						{
+							sphere.material.color.setHex("0x800000")
+						}
+						else // Changes ball to random colors
+						{
+							sphere.material.color.setHex(shade);
+						}
+					}
+
+					// Updating sphere's position 
+					update(sphere,i);
+				}
+			}
+
+			var update = function(sphere,i) {
+				// Updates sphere's position using updated velocity
+				sphere.position.y += directions[i];
+				sphere.position.x += rand_dir[i*2];
+				sphere.position.z += rand_dir[i*2 + 1]; 
+			}
+
+			var init = function() {
+				if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+				// Creates a new renderer which fits within the window's size
+				renderer = new THREE.WebGLRenderer( );
+				renderer.setPixelRatio(window.devicePixelRatio);
+				renderer.setSize(window.innerWidth, window.innerHeight);
+
+				// Enables shadows to be seen
+				renderer.shadowMap.enabled = true;
+				renderer.shadowMap.type = THREE.BasicShadowMap;
+				document.body.appendChild(renderer.domElement);
+
+				// Create a new scene where objects can be generated
+				scene = new THREE.Scene();
+
+				// Creates a camera and set its position within the scene
+				camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+				camera.position.set(25,5,125);
+
+				// Add a listener that checks to see if the window is being resized or not to trigger the onResize function
+				window.addEventListener('resize', onResize, false);
+
+				// This allows the user to zoom in/out, move around the scene with mouse movement
+				controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+				// Creates a new ambient light for the scene
+				var amb_light = new THREE.AmbientLight(0xffffff, 0.25);
+				scene.add(amb_light);
+
+				// Creates a new point light which exists in the middle of the room and is able to cast shadows appropriately
+				// based on an object's distance from the light
+				var pt_light = new THREE.PointLight(0xffffff, 1.5, 65);
+				pt_light.position.set(0, 0, 25);
+				pt_light.castShadow = true;
+				pt_light.shadow.camera.near = 0.1;
+				pt_light.shadow.camera.far = 65;
+				scene.add(pt_light);
+
+				// Creates a new GUI variable which uses dat.GUI
+				gui = new dat.GUI({
+					height : 1 * 32 - 1
+				});
+
+				// Defines a params structure which stores the different elements which will appear in the GUI
+				params = {
+					collision: 0,
+					tracking_mode: false
+				};
+
+				// Add the elements in params so it can be seen in the GUI
+				// .listen() is used in order for the GUI to check whether or not the value has changed between each frame
+				gui.add(params, 'collision').listen();	
+				gui.add(params, 'tracking_mode').listen();
+
+				// Randomize the speed and direction in which each ball travel within the box
+				for(var i = 0; i < maxSpheres * 2; i++)
+				{
+					if(i < maxSpheres)
+					{
+						entered[i] = [];
+						if(Math.random() >= 0.5)
+						{
+							directions[i] = 0.5 / speed;
+						}
+						else
+						{
+							directions[i] = -(0.5) / speed;
+						}
+					}
+					rand_dir[i] = (Math.random() - Math.random()) / speed;
+				}
+
+				// Creating the back red wall, determining its position. color, material and adding it to the scene
+				geometry = new THREE.PlaneGeometry(60,80);
+				material = new THREE.MeshPhongMaterial( {color: 0x800000, side: THREE.DoubleSide} );
+				mesh = new THREE.Mesh(geometry, material);
+
+				mesh.position.x = 0;
+				mesh.position.y = 5;
+				mesh.position.z = -20.5;
+
+				mesh.receiveShadow = true;
+
+				walls.push(mesh); //0 back wall
+				scene.add(mesh);
+
+				// Creating the front transparent "pink" wall
+				// This wall will not receive any shadows because it is transparent
+				geometry = new THREE.PlaneGeometry(60,80);
+				material = new THREE.MeshPhongMaterial({color: 0xFF33FC, transparent: true, opacity: 0.5, side: THREE.BackSide});
+				mesh = new THREE.Mesh(geometry, material);
+
+				mesh.position.x = 0;
+				mesh.position.y = 5;
+				mesh.position.z = 62.5;
+
+				walls.push(mesh); //1 front wall
+				scene.add(mesh);
+
+				// Creating the orange roof wall
+				geometry = new THREE.PlaneGeometry(60,83);
+				material = new THREE.MeshPhongMaterial( {color: 0xff8800, side: THREE.DoubleSide} );
+				mesh = new THREE.Mesh(geometry, material);
+
+				mesh.position.x = 0;
+				mesh.rotation.x = Math.PI / 2;
+				mesh.position.y = 45;
+				mesh.position.z = 21;
+
+				mesh.receiveShadow = true;
+
+				walls.push(mesh); //2 roof 
+				scene.add(mesh);
+
+				// Creating the yellow floor
+				geometry = new THREE.PlaneGeometry(60,83);
+				material = new THREE.MeshPhongMaterial( {color: 0xffff00, side: THREE.DoubleSide} );
+				mesh = new THREE.Mesh(geometry, material);
+				mesh.position.x = 0;
+				mesh.rotation.x = Math.PI / 2;
+				mesh.position.y = -35;
+				mesh.position.z = 21;
+				mesh.receiveShadow = true;
+				walls.push(mesh); //3 floor
+				scene.add(mesh);
+
+				// Creating the right green wall
+				geometry = new THREE.PlaneGeometry(83,80);
+				material = new THREE.MeshPhongMaterial( {color: 0x33cc33, side: THREE.DoubleSide} );
+				mesh = new THREE.Mesh(geometry, material);
+
+				mesh.position.x = 30;
+				mesh.position.y = 5;
+				mesh.rotation.y = Math.PI / 2;
+				mesh.position.z = 21;
+
+				mesh.receiveShadow = true;
+
+				walls.push(mesh); //4 right wall
+				scene.add(mesh);
+
+				// Creating the blue left wall
+				geometry = new THREE.PlaneGeometry(83,80);
+				material = new THREE.MeshPhongMaterial( {color: 0x3361FF, side: THREE.DoubleSide} );
+				mesh = new THREE.Mesh(geometry, material);
+
+				mesh.position.x = -30;
+				mesh.position.y = 5;
+				mesh.rotation.y = Math.PI / 2;
+				mesh.position.z = 21;
+
+				mesh.receiveShadow = true;
+
+				walls.push(mesh); //5 left wall
+				scene.add(mesh);
+			}
+
+			function animate() {
+				// Animates the scene 
+			    setTimeout(function() { // Controls the frame rate
+			    	requestAnimationFrame(animate);
+		        	collisionDetection();
+					renderer.render(scene, camera);
+					controls.update();	
+				}, 1000 / fps);	
+			}
+
+			// Sequence of functions to execute
+			getInput();
+			init();
+			animate();
+		</script>
+	</body>
+</html>
